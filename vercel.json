@@ -1,0 +1,24 @@
+{
+  "rewrites": [{ "source": "/", "destination": "/api/proxy" }]
+}
+```
+
+**2. Push to GitHub**
+- github.com → New repository → `sodium-proxy`
+- Upload all three files (keeping `api/proxy.js` inside the `api` folder)
+- Commit
+
+**3. Deploy on Vercel**
+- Go to vercel.com → sign up with GitHub
+- Click **Add New → Project**
+- Import `sodium-proxy`
+- Leave all settings as default
+- Click **Deploy**
+
+Takes about 30 seconds. You'll get a URL like `sodium-proxy.vercel.app`.
+
+**4. Add to Sodium**
+
+In `sodium.html` find `YOUR-WORKER-URL.workers.dev` and replace with your Vercel URL:
+```
+https://sodium-proxy.vercel.app/?url=${encodeURIComponent(t)}
