@@ -526,6 +526,42 @@ footer{border-top:1px solid var(--border);padding:16px 24px;display:flex;align-i
 .emu-name{font-family:var(--font-d);font-size:14px;letter-spacing:1px;color:var(--text);line-height:1.2;margin-bottom:3px;}
 .emu-meta{font-size:9px;color:var(--muted);letter-spacing:1px;display:flex;gap:6px;}
 .emu-console-tag{color:var(--accent);opacity:.8;}
+
+/* ── FAVORITE BUTTON ── */
+.fav-btn{position:absolute;top:6px;right:8px;background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px;line-height:1;padding:2px;transition:color .15s;z-index:2;}
+.fav-btn:hover,.fav-btn.active{color:#f5a623;}
+.fav-btn .material-icons{font-size:16px;}
+
+/* ── BETTER GAME CARDS ── */
+.game-card{background:var(--card);border:1px solid var(--border);cursor:pointer;transition:all .15s;position:relative;overflow:hidden;border-radius:2px;}
+.game-card-thumb{width:100%;aspect-ratio:16/9;overflow:hidden;position:relative;background:var(--surface);}
+.game-card-thumb canvas{width:100%;height:100%;display:block;}
+.game-card-thumb-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);opacity:0;transition:opacity .18s;}
+.game-card-thumb-overlay .material-icons{font-size:28px;color:var(--accent);}
+.game-card:hover .game-card-thumb-overlay{opacity:1;}
+.game-card:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.5);}
+.game-card-body{padding:8px 10px 10px;}
+.game-name{font-family:var(--font-d);font-size:14px;letter-spacing:1px;color:var(--text);line-height:1.2;}
+.game-id{font-size:9px;color:var(--muted);letter-spacing:1px;margin-top:2px;}
+
+/* ── RANDOM + FAVORITES TOOLBAR ── */
+.games-toolbar{display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap;}
+.games-toolbar-btn{background:none;border:1px solid var(--border-bright);color:var(--muted);font-family:var(--font-mono);font-size:10px;padding:6px 14px;cursor:pointer;letter-spacing:1px;transition:all .15s;display:flex;align-items:center;gap:6px;}
+.games-toolbar-btn:hover{border-color:var(--accent);color:var(--accent);}
+.games-toolbar-btn .material-icons{font-size:14px;}
+.fav-tab-btn{border-color:var(--amber-dim)!important;color:var(--amber)!important;}
+.fav-tab-btn.viewing{background:var(--amber-glow);}
+
+/* ── OPEN IN ABOUT:BLANK ── */
+.gp-blank-btn{background:none;border:1px solid var(--border);color:var(--muted);font-family:var(--font-mono);font-size:10px;padding:3px 10px;cursor:pointer;letter-spacing:1px;transition:all .15s;}
+.gp-blank-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+/* ── FULLSCREEN BTN ── */
+.gp-fs-btn{background:none;border:1px solid var(--border);color:var(--muted);font-family:var(--font-mono);font-size:10px;padding:3px 8px;cursor:pointer;letter-spacing:1px;transition:all .15s;}
+.gp-fs-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+/* ── LAZY LOAD PLACEHOLDER ── */
+.game-card.lazy-pending .game-card-thumb{background:var(--card);}
 </style>
 </head>
 <body>
@@ -601,6 +637,17 @@ footer{border-top:1px solid var(--border);padding:16px 24px;display:flex;align-i
           <div class="stat"><div class="stat-num">∞</div><div class="stat-label">Free</div></div>
         </div>
       </section>
+      <div class="games-toolbar">
+        <button class="games-toolbar-btn" id="btn-random" title="Play a random game">
+          <span class="material-icons">shuffle</span>RANDOM GAME
+        </button>
+        <button class="games-toolbar-btn fav-tab-btn" id="btn-show-favs" title="View favorite games">
+          <span class="material-icons">star</span>FAVORITES
+        </button>
+        <button class="games-toolbar-btn" id="btn-open-blank" title="Open Sodium in about:blank">
+          <span class="material-icons">open_in_new</span>OPEN IN TAB
+        </button>
+      </div>
       <div id="sections-container"></div>
       <div id="no-results"><div class="nr-icon"><span class="material-icons">block</span></div><div class="nr-text">NO MATCHES FOUND</div></div>
     </div>
@@ -862,6 +909,8 @@ footer{border-top:1px solid var(--border);padding:16px 24px;display:flex;align-i
 <div id="game-player">
   <div class="gp-topbar">
     <div class="gp-title" id="gp-title">—</div>
+    <button class="gp-fs-btn" id="gp-fullscreen" title="Fullscreen"><span class="material-icons" style="font-size:14px;vertical-align:-3px">fullscreen</span></button>
+    <button class="gp-blank-btn" id="gp-blank" title="Open in new tab">NEW TAB</button>
     <button class="gp-btn" id="gp-reload">RELOAD</button>
     <button class="gp-btn danger" id="gp-close">EXIT</button>
   </div>
@@ -1554,8 +1603,86 @@ ALPHA.forEach(ch => {
 const container = document.getElementById('sections-container');
 const noResults  = document.getElementById('no-results');
 
+/* ── FAVORITES ── */
+const FAV_KEY = 'sodium_favs';
+function getFavs() { try { return new Set(JSON.parse(localStorage.getItem(FAV_KEY)||'[]')); } catch(e) { return new Set(); } }
+function saveFavs(set) { try { localStorage.setItem(FAV_KEY, JSON.stringify([...set])); } catch(e) {} }
+function toggleFav(file, btn) {
+  const favs = getFavs();
+  if (favs.has(file)) { favs.delete(file); btn.classList.remove('active'); }
+  else { favs.add(file); btn.classList.add('active'); }
+  saveFavs(favs);
+}
+
+/* ── LAZY LOAD via IntersectionObserver ── */
+let _lazyObserver = null;
+function setupLazyObserver() {
+  if (_lazyObserver) _lazyObserver.disconnect();
+  _lazyObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      const card = entry.target;
+      if (!card.dataset.file) return;
+      _lazyObserver.unobserve(card);
+      renderCardContent(card, card.dataset.file);
+    });
+  }, { rootMargin: '200px' });
+}
+
+function renderCardContent(card, file) {
+  const favs = getFavs();
+  const isFav = favs.has(file);
+  card.classList.remove('lazy-pending');
+
+  /* Thumb with generated canvas */
+  const thumb = document.createElement('div');
+  thumb.className = 'game-card-thumb';
+  const canvas = document.createElement('canvas');
+  canvas.width = 320; canvas.height = 180;
+  thumb.appendChild(canvas);
+  const overlay = document.createElement('div');
+  overlay.className = 'game-card-thumb-overlay';
+  overlay.innerHTML = '<span class="material-icons">play_arrow</span>';
+  thumb.appendChild(overlay);
+
+  /* Body */
+  const body = document.createElement('div');
+  body.className = 'game-card-body';
+  body.innerHTML = `<div class="game-name">${makeDisplayName(file)}</div><div class="game-id">${file}</div>`;
+
+  /* Fav button */
+  const favBtn = document.createElement('button');
+  favBtn.className = 'fav-btn' + (isFav ? ' active' : '');
+  favBtn.title = 'Favorite';
+  favBtn.innerHTML = '<span class="material-icons">' + (isFav ? 'star' : 'star_border') + '</span>';
+  favBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    toggleFav(file, favBtn);
+    favBtn.innerHTML = '<span class="material-icons">' + (getFavs().has(file) ? 'star' : 'star_border') + '</span>';
+  });
+
+  card.appendChild(thumb);
+  card.appendChild(body);
+  card.appendChild(favBtn);
+
+  /* Draw preview async so it doesn't block */
+  requestAnimationFrame(() => drawPreview(canvas, file));
+}
+
+function makeGameCard(file) {
+  const card = document.createElement('div');
+  card.className = 'game-card lazy-pending';
+  card.dataset.file = file;
+  card.style.minHeight = '120px';
+  card.onclick = () => openLaunchScreen(file);
+  if (_lazyObserver) _lazyObserver.observe(card);
+  else renderCardContent(card, file); /* fallback if no IntersectionObserver */
+  return card;
+}
+
 function buildSections(map) {
   container.innerHTML = '';
+  setupLazyObserver();
   let total = 0;
   ALPHA.forEach(ch => {
     const items = map[ch];
@@ -1567,18 +1694,39 @@ function buildSections(map) {
     sec.innerHTML = `<div class="letter-header"><span class="letter-char">${ch}</span><span class="letter-count">${items.length} game${items.length!==1?'s':''}</span></div>`;
     const grid = document.createElement('div');
     grid.className = 'game-grid';
-    items.forEach(file => {
-      const card = document.createElement('div');
-      card.className = 'game-card';
-      card.innerHTML = `<div class="game-name">${makeDisplayName(file)}</div><div class="game-id">${file}</div><div class="play-icon"><span class="material-icons" style="font-size:11px">play_arrow</span></div>`;
-      card.onclick = () => openLaunchScreen(file);
-      grid.appendChild(card);
-    });
+    items.forEach(file => grid.appendChild(makeGameCard(file)));
     sec.appendChild(grid);
     container.appendChild(sec);
   });
   return total;
 }
+
+let _viewingFavs = false;
+function showFavorites() {
+  _viewingFavs = !_viewingFavs;
+  const btn = document.getElementById('btn-show-favs');
+  btn.classList.toggle('viewing', _viewingFavs);
+  if (_viewingFavs) {
+    const favs = getFavs();
+    container.innerHTML = '';
+    setupLazyObserver();
+    if (favs.size === 0) {
+      container.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted);letter-spacing:2px;font-size:11px;">NO FAVORITES YET — STAR SOME GAMES</div>';
+    } else {
+      const sec = document.createElement('section');
+      sec.className = 'letter-section';
+      sec.innerHTML = `<div class="letter-header"><span class="letter-char" style="color:var(--amber)">★</span><span class="letter-count">${favs.size} favorite${favs.size!==1?'s':''}</span></div>`;
+      const grid = document.createElement('div');
+      grid.className = 'game-grid';
+      [...favs].forEach(file => grid.appendChild(makeGameCard(file)));
+      sec.appendChild(grid);
+      container.appendChild(sec);
+    }
+  } else {
+    buildSections(byChar);
+  }
+}
+
 buildSections(byChar);
 
 document.getElementById('search').addEventListener('input', e => {
@@ -1706,6 +1854,47 @@ function reloadGame() {
 gpClose.addEventListener('click', closeGamePlayer);
 gpReload.addEventListener('click', reloadGame);
 
+/* Fullscreen button */
+document.getElementById('gp-fullscreen')?.addEventListener('click', () => {
+  const el = document.getElementById('game-player');
+  if (!document.fullscreenElement) {
+    el.requestFullscreen().catch(()=>{});
+  } else {
+    document.exitFullscreen();
+  }
+});
+
+/* Open in new about:blank tab with just the game iframe */
+document.getElementById('gp-blank')?.addEventListener('click', () => {
+  if (!currentGameFile) return;
+  const url = `https://cdn.jsdelivr.net/gh/bubbls/ugs-singlefile/UGS-Files/${encodeURIComponent(normalizeFilename(currentGameFile))}?t=${Date.now()}`;
+  const win = window.open('about:blank', '_blank');
+  if (win) {
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${makeDisplayName(currentGameFile)}</title><style>*{margin:0;padding:0}html,body{width:100%;height:100%;overflow:hidden;background:#000}iframe{width:100%;height:100%;border:none}</style></head><body><iframe src="${url}" allow="autoplay;fullscreen;pointer-lock" allowfullscreen></iframe></body></html>`);
+    win.document.close();
+  }
+});
+
+/* Open in about:blank toolbar button */
+document.getElementById('btn-open-blank')?.addEventListener('click', () => {
+  const win = window.open('about:blank', '_blank');
+  if (win) {
+    const src = document.documentElement.outerHTML;
+    win.document.open();
+    win.document.write('<!DOCTYPE html>' + src.replace('window._skipEntry', 'window._skipEntryDone'));
+    win.document.close();
+  }
+});
+
+/* Random game button */
+document.getElementById('btn-random')?.addEventListener('click', () => {
+  const randomFile = FILES[Math.floor(Math.random() * FILES.length)];
+  openLaunchScreen(randomFile);
+});
+
+/* Favorites toolbar button */
+document.getElementById('btn-show-favs')?.addEventListener('click', showFavorites);
+
 function commitLaunch() {
   if (!pendingFile) return;
   const file = pendingFile;
@@ -1746,7 +1935,7 @@ function commitLaunch() {
    ────────────────────────────────────────────────────────────────────────── */
 const PROXY_SERVICES = [
   /* ★ SELF-HOSTED (best — never blocked, deploy your own Cloudflare Worker) */
-  { name:'your-worker',   url: t => `sodium-site.vercel.app/?url=${encodeURIComponent(t)}`, custom: true },
+  { name:'your-worker',   url: t => `https://sodium-site.vercel.app/api/proxy?url=${encodeURIComponent(t)}`, custom: true },
   /* Public CORS proxies — may be blocked on school/work networks */
   { name:'corsproxy.io',  url: t => `https://corsproxy.io/?url=${encodeURIComponent(t)}` },
   { name:'allorigins',    url: t => `https://api.allorigins.win/raw?url=${encodeURIComponent(t)}` },
@@ -1770,18 +1959,41 @@ function loadViaProxy(targetUrl, iframe, onLabel) {
   iframe.src = purl;
   if (onLabel) onLabel(PROXY_SERVICES[tryIdx].name);
 
-  /* Timeout: if blank after 6s, silently advance to next proxy */
+  /* After load, check if we got a real page or an auth/block page */
   const timer = setTimeout(() => {
-    const next = (tryIdx + 1) % PROXY_SERVICES.length;
-    /* Don't cycle back to a custom slot that isn't configured */
-    const skip = PROXY_SERVICES[next].custom && proxyUrl('x').includes('YOUR-WORKER-URL');
-    _proxySvcIdx = skip ? (next + 1) % PROXY_SERVICES.length : next;
-    /* Update the select dropdown to match */
-    const sel = document.getElementById('proxy-svc-select');
-    if (sel) sel.value = _proxySvcIdx;
-  }, 6000);
+    try {
+      const doc = iframe.contentDocument;
+      if (doc) {
+        const body = doc.body?.innerText || '';
+        /* Vercel/hosting auth pages typically contain these strings */
+        const blocked = ['sign in', 'log in', 'authenticate', 'access denied', 'vercel.com'].some(
+          s => body.toLowerCase().includes(s)
+        );
+        if (blocked) {
+          /* Try next proxy */
+          const next = (_proxySvcIdx + 1) % PROXY_SERVICES.length;
+          _proxySvcIdx = next;
+          const sel = document.getElementById('proxy-svc-select');
+          if (sel) sel.value = _proxySvcIdx;
+          loadViaProxy(targetUrl, iframe, onLabel);
+        }
+      }
+    } catch(e) { /* cross-origin — that means it actually loaded */ }
+  }, 4000);
 
-  iframe.addEventListener('load', () => clearTimeout(timer), { once: true });
+  /* Auto-advance on timeout */
+  const failTimer = setTimeout(() => {
+    const next = (_proxySvcIdx + 1) % PROXY_SERVICES.length;
+    if (next !== tryIdx) {
+      _proxySvcIdx = next;
+      const sel = document.getElementById('proxy-svc-select');
+      if (sel) sel.value = _proxySvcIdx;
+    }
+  }, 8000);
+
+  iframe.addEventListener('load', () => {
+    clearTimeout(failTimer);
+  }, { once: true });
 }
 
 /* ── VPN Mode: when on, ALL app/browser iframes route through proxy ── */
