@@ -2489,11 +2489,11 @@ function createBrowserTab(url) {
       }
     } catch(e) { /* cross-origin — expected */ }
 
-    /* Inject link override for same-origin pages (proxy-fetched pages) */
+    /* Inject link override — works for same-origin / proxy-loaded pages */
     try {
       const doc = iframe.contentDocument;
       if (doc && doc.body) injectLinkOverride(doc);
-    } catch(e) { /* cross-origin — sandbox handles it instead */ }
+    } catch(e) { /* cross-origin direct load — can't inject */ }
 
     brStatus('');
   });
@@ -2510,40 +2510,61 @@ function createBrowserTab(url) {
 
 function injectLinkOverride(doc) {
   try {
-    /* 1. Inject <base target="_self"> so all relative links default to self */
+    /* 1. <base target="_self"> so relative links default to same frame */
     if (!doc.querySelector('base[data-sodium]')) {
       const base = doc.createElement('base');
       base.target = '_self';
       base.dataset.sodium = '1';
       (doc.head || doc.documentElement).prepend(base);
     }
-    /* 2. Rewrite existing _blank links */
-    doc.querySelectorAll('a').forEach(a => { a.target = '_self'; a.removeAttribute('rel'); });
-    /* 3. Override window.open so JS-triggered popups stay in tab */
+
+    /* 2. Rewrite all <a> links — force _self AND proxy href if proxy is on */
+    function patchLinks(root) {
+      (root.querySelectorAll ? root.querySelectorAll('a[href]') : []).forEach(a => {
+        a.target = '_self';
+        a.removeAttribute('rel');
+        if (browserProxyMode) {
+          const href = a.getAttribute('href');
+          if (href && href.startsWith('http') && !href.startsWith(location.origin)) {
+            a.addEventListener('click', e => {
+              e.preventDefault();
+              const activeTab = getActiveTab();
+              if (activeTab) loadViaProxy(href, activeTab.iframe, name => brStatus('via ' + name));
+            }, { once: false });
+          }
+        }
+      });
+    }
+    patchLinks(doc);
+
+    /* 3. Override window.open so JS popups navigate the iframe instead */
     if (doc.defaultView && !doc.defaultView.__sodiumPatched) {
       doc.defaultView.__sodiumPatched = true;
-      const origOpen = doc.defaultView.open.bind(doc.defaultView);
       doc.defaultView.open = (url) => {
         if (url && url !== 'about:blank') {
-          const iframe = doc.defaultView.frameElement;
-          if (iframe) iframe.src = url;
+          const activeTab = getActiveTab();
+          if (activeTab) {
+            if (browserProxyMode) loadViaProxy(url, activeTab.iframe, name => brStatus('via ' + name));
+            else activeTab.iframe.src = url;
+          }
         }
-        return null; /* returning null prevents new windows */
+        return null;
       };
     }
+
     /* 4. MutationObserver for dynamically added links */
     if (!doc.__sodiumObserver) {
       const obs = new MutationObserver(muts => {
         muts.forEach(m => m.addedNodes.forEach(n => {
           if (n.nodeType !== 1) return;
-          if (n.tagName === 'A') { n.target = '_self'; n.removeAttribute('rel'); }
-          n.querySelectorAll?.('a').forEach(a => { a.target = '_self'; a.removeAttribute('rel'); });
+          patchLinks(n.tagName === 'A' ? { querySelectorAll: () => [n] } : n);
         }));
       });
       obs.observe(doc.body || doc.documentElement, { childList: true, subtree: true });
       doc.__sodiumObserver = obs;
     }
-  } catch(e) { /* cross-origin — sandbox blocks popups instead */ }
+
+  } catch(e) { /* cross-origin — can't access contentDocument */ }
 }
 
 function switchBrowserTab(id) {
