@@ -1935,7 +1935,7 @@ function commitLaunch() {
    ────────────────────────────────────────────────────────────────────────── */
 const PROXY_SERVICES = [
   /* ★ SELF-HOSTED (best — never blocked, deploy your own Cloudflare Worker) */
-  { name:'your-worker',   url: t => `https://sodium-site.vercel.app/api/proxy?url=${encodeURIComponent(t)}`, custom: true },
+  { name:'your-worker',   url: t => `https://sodium-site.vercel.app/API/proxy?url=${encodeURIComponent(t)}`, custom: true },
   /* Public CORS proxies — may be blocked on school/work networks */
   { name:'corsproxy.io',  url: t => `https://corsproxy.io/?url=${encodeURIComponent(t)}` },
   { name:'allorigins',    url: t => `https://api.allorigins.win/raw?url=${encodeURIComponent(t)}` },
